@@ -68,8 +68,26 @@ class Game:
             board_to_print[fX,fY] = ("( )")
             board_to_print[hX,hY] = ("(" + str.strip(board_to_print[hX,hY]) + ")")
         print(board_to_print)
+        print("")
 
     def GetPossibleMoves(self, fromX, fromY): # x - row y - column
+        possible_moves = self.GetAllPossibleMoves(fromX,fromY)
+        if(self.board[fromX,fromY] == Checker.White.value or self.board[fromX,fromY] == Checker.WhiteKing.value):
+            colour = PlayerColour.White.value
+        if(self.board[fromX,fromY] == Checker.Red.value or self.board[fromX,fromY] == Checker.RedKing.value):
+            colour = PlayerColour.Red.value
+        if(self.CheckIfPossibleMultipleJump(colour)):
+            can_conquest = False
+            for (possibleX, possibleY) in possible_moves:
+                if(abs(calculateDistance(fromX,fromY,possibleX,possibleY)-8) < eps): 
+                    can_conquest = True
+                    break
+            if(can_conquest):
+                return possible_moves
+            else:
+                return set()
+        return possible_moves
+    def GetAllPossibleMoves(self, fromX, fromY): # x - row y - column
         possible_moves = set()
         left_top = self.CheckLeftTop(fromX,fromY)
         left_bottom = self.CheckLeftBottom(fromX,fromY)
@@ -136,7 +154,7 @@ class Game:
             for y in range(0, 8):
                 if((colour == PlayerColour.Red.value and (self.board[x,y] == Checker.Red.value or self.board[x,y] == Checker.RedKing.value)) or 
                    (colour == PlayerColour.White.value and (self.board[x,y] == Checker.White.value or self.board[x,y] == Checker.WhiteKing.value))):
-                    possible_moves = self.GetPossibleMoves(x,y)
+                    possible_moves = self.GetAllPossibleMoves(x,y)
                     for (possibleX, possibleY) in possible_moves:
                         if(abs(calculateDistance(x,y,possibleX,possibleY)-8) < eps):
                             return True
