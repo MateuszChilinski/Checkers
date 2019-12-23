@@ -1,7 +1,8 @@
 from enum import Enum
 import numpy as np
+import math
 eps = 0.001
-
+C = 0.5
 class Checker(Enum):
     NotAllowed = -1
     Empty = 0
@@ -203,27 +204,77 @@ class Game:
         self.currentPlayer = PlayerColour.White.value if self.currentPlayer == PlayerColour.Red.value else PlayerColour.Red.value
     def setxy(self,x,y,val):
         self.board[x,y] = val
+class Node:
+    def __init__(self, parent=None, timesWon=0, timesVisited=0, chosenMove=0, nodes=None):
+        self.parent = parent
+        self.timesWon = timesWon
+        self.timesVisited = timesVisited
+        self.chosenMove = chosenMove
+        if nodes==None:
+            self.nodes = list()
+        else:
+            self.nodes = nodes
+
+
 class AI:
     def __init__(self, colour):
         self.colour = colour
 
+    def trainMCTS(self, it):
+        root = Node()
+        for i in range(0, it):
+            self.selection(root)
+            print('Generating model: ' + str((i+1)/it*100) + '%')
+    def selection(self, node):
+        if(len(node.nodes) == 0):
+            self.expansion(node)
+            return
+        bestChild = node.nodes[0]
+        bestUCB = CalculateUCB(bestChild)
+        for child in node.nodes:
+            ucb = CalculateUCB(node)
+            if bestUCB < ucb:
+                bestChild = child
+                bestUCB = ucb
+        selection(bestChild)
+    def expansion(self, node):
+        print("exp")
+
+    def makeRandomMove(self, game):
+        availableMoves = game.GetPossibleMoves() # random possible move, must get random checker too
+    def backpropagation(node, won):
+        currentNode = node
+        while currentNode != None:
+            currentNode.timesVisited = currentNode.timesVisited+1
+            if(won):
+                currentNode.timesWon = currentNode.timesWon+1
+            currentNode = currentNode.parent
+    def CalculateUCB(node):
+        if node.timesVisited == 0:
+            return math.inf
+        return node.timesWon/node.timesVisited + C * math.sqrt(math.log(node.parent.timesVisited) / node.timesVisited);
     def CalculateBestMove(game):
         return (1,1,1,1)
 
     def MakeMove(game):
         (fromX, fromY, toX, toY) = CalculateBestMove(game)
         game.MakeMove(fromX, fromY, toX, toY, self.colour)
-    
+   
+train = 1
 
-game = Game()
-print("Initial")
-game.PrintBoard()
-game.MakeMove(5, 0, 4, 1, PlayerColour.Red.value)
-game.MakeMove(2, 1, 3, 2, PlayerColour.White.value)
-game.MakeMove(5, 6, 4, 7, PlayerColour.Red.value)
-game.setxy(7,2,Checker.Empty.value)
-game.MakeMove(3, 2, 5, 0, PlayerColour.White.value)
-game.MakeMove(5, 0, 7, 2, PlayerColour.White.value)
-game.MakeMove(5, 4, 4, 3, PlayerColour.Red.value)
-game.MakeMove(7, 2, 5, 4, PlayerColour.White.value)
-game.MakeMove(5, 4, 3, 2, PlayerColour.White.value)
+if train == 0:
+    game = Game()
+    print("Initial")
+    game.PrintBoard()
+    game.MakeMove(5, 0, 4, 1, PlayerColour.Red.value)
+    game.MakeMove(2, 1, 3, 2, PlayerColour.White.value)
+    game.MakeMove(5, 6, 4, 7, PlayerColour.Red.value)
+    game.setxy(7,2,Checker.Empty.value)
+    game.MakeMove(3, 2, 5, 0, PlayerColour.White.value)
+    game.MakeMove(5, 0, 7, 2, PlayerColour.White.value)
+    game.MakeMove(5, 4, 4, 3, PlayerColour.Red.value)
+    game.MakeMove(7, 2, 5, 4, PlayerColour.White.value)
+    game.MakeMove(5, 4, 3, 2, PlayerColour.White.value)
+else:
+    ai = AI(PlayerColour.Red.value)
+    ai.trainMCTS(10)
