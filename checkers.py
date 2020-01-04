@@ -20,6 +20,7 @@ class GameStatus(Enum):
     InProgress = 0
     RedWon = 1
     WhiteWon = 2
+    Tie = 3
 
 class MovePossibilities(Enum):
     Impossible = 0
@@ -230,6 +231,8 @@ class Game:
     def GameStatus(self):
         whites = 0
         reds = 0
+        if(len(self.GetAllCurrentPossibleMoves()) == 0):
+            return GameStatus.Tie
         for x in range(0, 8):
             for y in range(0, 8):
                 if(self.board[x,y] == Checker.White.value or self.board[x,y] == Checker.WhiteKing.value):
@@ -365,4 +368,4 @@ if train == 0:
     game.MakeMove(5, 4, 3, 2, PlayerColour.White.value)
 else:
     ai = AI(PlayerColour.Red.value)
-    ai.trainMCTS(10)
+    ai.trainMCTS(20)
