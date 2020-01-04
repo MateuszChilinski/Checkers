@@ -2,6 +2,8 @@ from enum import Enum
 import numpy as np
 import math
 import random
+import time
+
 eps = 0.001
 C = 0.5
 class Checker(Enum):
@@ -72,6 +74,8 @@ class Game:
         
         if(moves != None):
             for move in moves:
+                if(move == None):
+                    continue
                 self.MakeMove(move[0], move[1], move[2], move[3], move[4])
         
     def PrintBoard(self,fX=-1,fY=-1,hX=-1,hY=-1):
@@ -99,8 +103,10 @@ class Game:
         possible_moves = self.GetAllPossibleMoves(fromX,fromY)
         if(self.board[fromX,fromY] == Checker.White.value or self.board[fromX,fromY] == Checker.WhiteKing.value):
             colour = PlayerColour.White.value
-        if(self.board[fromX,fromY] == Checker.Red.value or self.board[fromX,fromY] == Checker.RedKing.value):
+        elif(self.board[fromX,fromY] == Checker.Red.value or self.board[fromX,fromY] == Checker.RedKing.value):
             colour = PlayerColour.Red.value
+        else:
+            return set()
         if(self.CheckIfPossibleMultipleJump(colour)):
             can_conquest = False
             for (possibleX, possibleY) in possible_moves:
@@ -256,7 +262,7 @@ class Node:
             self.nodes = nodes
     def GetGame(self):
         moves = self.GetMoves()
-        moves = moves.reverse()
+        moves.reverse()
         return Game(moves)
     def GetMoves(self):
         node = self
@@ -277,12 +283,24 @@ class AI:
         for i in range(0, it):
             self.selection(self.root)
             print('Generating model: ' + str((i+1)/it*100) + '%')
-        print(self.root.timesVisited)
 
     def MakeMove(self, game):
-        print(1)
+        if(not np.array_equal(game.board, self.root.GetGame().board)):
+            for node in self.root.nodes:
+                if(np.array_equal(game.board, node.GetGame().board)):
+                    self.root = node
+        if(not np.array_equal(game.board, self.root.GetGame().board)):
+            print("I got lost :(")
+            return
+        timeout = time.time() + 5   # 5 minutes from now
+        while True:
+            self.selection(self.root)
+            if time.time() > timeout:
+                break
+        bestNode = max(self.root.nodes, key=lambda node: node.timesWon)
+        self.root = bestNode
+        game.MakeMove(bestNode.chosenMove[0], bestNode.chosenMove[1], bestNode.chosenMove[2], bestNode.chosenMove[3], bestNode.chosenMove[4])
         
-    
     def selection(self, node):
         if(len(node.nodes) == 0):
             self.expansion(node)
@@ -295,9 +313,10 @@ class AI:
                 bestChild = child
                 bestUCB = ucb
         self.selection(bestChild)
+
     def expansion(self, node):
-        winners = list()
         if(node.GetGame().GameStatus() == GameStatus.InProgress):
+            winners = list()
             newMoves = node.GetGame().GetAllCurrentPossibleMoves()
             for move in newMoves:
                 curretNodeGameStatus = node.GetGame()
@@ -329,12 +348,6 @@ class AI:
         if node.timesVisited == 0:
             return math.inf
         return node.timesWon/node.timesVisited + C * math.sqrt(math.log(node.parent.timesVisited) / node.timesVisited)
-    def CalculateBestMove(self, game):
-        return (1,1,1,1)
-
-    def MakeMove(self, game):
-        (fromX, fromY, toX, toY) = CalculateBestMove(game)
-        game.MakeMove(fromX, fromY, toX, toY, self.colour)
 
     def Simulation(self, node):
         gameToSimulate = node.GetGame()
@@ -350,7 +363,7 @@ class AI:
         availableMoves = game.GetAllCurrentPossibleMoves()
         randomMove = availableMoves[random.randint(0, len(availableMoves)-1)]
         game.MakeMove(randomMove[0], randomMove[1], randomMove[2], randomMove[3], randomMove[4])
-   
+
 train = 1
 
 if train == 0:
@@ -367,5 +380,15 @@ if train == 0:
     game.MakeMove(7, 2, 5, 4, PlayerColour.White.value)
     game.MakeMove(5, 4, 3, 2, PlayerColour.White.value)
 else:
+
+    game = Game()
+    print("Initial")
+
     ai = AI(PlayerColour.Red.value)
     ai.trainMCTS(20)
+    
+    game.PrintBoard()
+
+    while(game.GameStatus() == GameStatus.Tie or game.GameStatus() == GameStatus.InProgress):
+        ai.MakeMove(game)
+        game.PrintBoard()
