@@ -1,6 +1,7 @@
 from enum import Enum
 import numpy as np
 import math
+import random
 eps = 0.001
 C = 0.5
 class Checker(Enum):
@@ -15,6 +16,11 @@ class PlayerColour(Enum):
     Red = 1
     White = 2
 
+class GameStatus(Enum):
+    InProgress = 0
+    RedWon = 1
+    WhiteWon = 2
+
 class MovePossibilities(Enum):
     Impossible = 0
     Possible = 1
@@ -22,7 +28,7 @@ class MovePossibilities(Enum):
 
 def ConvToEnumShort(num):
     if(num == -1):
-        return " X "
+        return "   "
     elif(num == 0):
         return "   "
     elif(num == 1):
@@ -42,7 +48,7 @@ def calculateDistance(x1,y1,x2,y2):
 
 class Game:
     # reds are first
-    def __init__(self):
+    def __init__(self, moves=None):
         self.board = np.array(np.repeat(0,64))
         self.currentPlayer = PlayerColour.Red.value
         for i in range(1, 9):
@@ -63,6 +69,10 @@ class Game:
 
         self.board = self.board.reshape((8,8))
         
+        if(moves != None):
+            for move in moves:
+                self.MakeMove(move[0], move[1], move[2], move[3], move[4])
+        
     def PrintBoard(self,fX=-1,fY=-1,hX=-1,hY=-1):
         board_to_print = np.array(np.vectorize(ConvToEnumShort)(self.board), dtype=object)
         if(hX != -1 and hY != -1 and fX != -1 and fY != -1):
@@ -70,6 +80,19 @@ class Game:
             board_to_print[hX,hY] = ("(" + str.strip(board_to_print[hX,hY]) + ")")
         print(board_to_print)
         print("")
+
+    def GetAllCurrentPossibleMoves(self):
+        moves = list()
+        for x in range(0, 8):
+            for y in range(0, 8):
+                #elf.PrintBoard()
+                if((self.currentPlayer == PlayerColour.White.value and (self.board[x,y] == Checker.White.value or self.board[x,y] == Checker.WhiteKing.value)) or 
+                    (self.currentPlayer == PlayerColour.Red.value and (self.board[x,y] == Checker.Red.value or self.board[x,y] == Checker.RedKing.value))):
+                    for move in self.GetPossibleMoves(x,y):
+                        #print(move)
+                        moves.append((x, y , move[0], move[1], self.currentPlayer))
+        return moves
+
 
     def GetPossibleMoves(self, fromX, fromY): # x - row y - column
         possible_moves = self.GetAllPossibleMoves(fromX,fromY)
@@ -194,7 +217,7 @@ class Game:
         if(colour == PlayerColour.White.value and toX == 7):
             #promote to king
             self.board[toX,toY] = Checker.WhiteKing.value
-        self.PrintBoard(fromX,fromY,toX,toY)
+        #self.PrintBoard(fromX,fromY,toX,toY)
         if(next_move_possible):
             possible_moves = self.GetPossibleMoves(toX, toY)
             for (possibleX, possibleY) in possible_moves:
@@ -204,8 +227,22 @@ class Game:
         self.currentPlayer = PlayerColour.White.value if self.currentPlayer == PlayerColour.Red.value else PlayerColour.Red.value
     def setxy(self,x,y,val):
         self.board[x,y] = val
+    def GameStatus(self):
+        whites = 0
+        reds = 0
+        for x in range(0, 8):
+            for y in range(0, 8):
+                if(self.board[x,y] == Checker.White.value or self.board[x,y] == Checker.WhiteKing.value):
+                    whites = whites + 1
+                if(self.board[x,y] == Checker.Red.value or self.board[x,y] == Checker.RedKing.value):
+                    reds = reds + 1
+        if(whites == 0):
+            return GameStatus.RedWon
+        if(reds == 0):
+            return GameStatus.WhiteWon
+        return GameStatus.InProgress
 class Node:
-    def __init__(self, parent=None, timesWon=0, timesVisited=0, chosenMove=0, nodes=None):
+    def __init__(self, parent=None, timesWon=0, timesVisited=0, chosenMove=None, nodes=None):
         self.parent = parent
         self.timesWon = timesWon
         self.timesVisited = timesVisited
@@ -214,6 +251,18 @@ class Node:
             self.nodes = list()
         else:
             self.nodes = nodes
+    def GetGame(self):
+        moves = self.GetMoves()
+        moves = moves.reverse()
+        return Game(moves)
+    def GetMoves(self):
+        node = self
+        moves = list()
+        while(node.parent != None):
+            moves.append(node.chosenMove)
+            node = node.parent
+        moves.append(node.chosenMove)
+        return moves
 
 
 class AI:
@@ -221,44 +270,83 @@ class AI:
         self.colour = colour
 
     def trainMCTS(self, it):
-        root = Node()
+        self.root = Node()
         for i in range(0, it):
-            self.selection(root)
+            self.selection(self.root)
             print('Generating model: ' + str((i+1)/it*100) + '%')
+        print(self.root.timesVisited)
+
+    def MakeMove(self, game):
+        print(1)
+        
+    
     def selection(self, node):
         if(len(node.nodes) == 0):
             self.expansion(node)
             return
         bestChild = node.nodes[0]
-        bestUCB = CalculateUCB(bestChild)
+        bestUCB = self.CalculateUCB(bestChild)
         for child in node.nodes:
-            ucb = CalculateUCB(node)
+            ucb = self.CalculateUCB(child)
             if bestUCB < ucb:
                 bestChild = child
                 bestUCB = ucb
-        selection(bestChild)
+        self.selection(bestChild)
     def expansion(self, node):
-        print("exp")
-
-    def makeRandomMove(self, game):
-        availableMoves = game.GetPossibleMoves() # random possible move, must get random checker too
-    def backpropagation(node, won):
+        winners = list()
+        if(node.GetGame().GameStatus() == GameStatus.InProgress):
+            newMoves = node.GetGame().GetAllCurrentPossibleMoves()
+            for move in newMoves:
+                curretNodeGameStatus = node.GetGame()
+                curretNodeGameStatus.MakeMove(move[0], move[1], move[2], move[3], move[4])
+                newNode = Node(node, 0, 0, move, None)
+                node.nodes.append(newNode)
+                if(curretNodeGameStatus.GameStatus() == GameStatus.RedWon):
+                    winners.append(newNode)
+            if(len(winners) > 0):
+                winnerNode = winners[0]
+                self.Simulation(winnerNode)
+                return
+            randomNode = node.nodes[random.randint(0, len(node.nodes)-1)]
+            self.Simulation(randomNode)
+        else:
+            if(node.GetGame().GameStatus() == GameStatus.RedWon):
+                won = True
+            else:
+                won = False
+            self.backpropagation(node, won)
+    def backpropagation(self, node, won):
         currentNode = node
         while currentNode != None:
             currentNode.timesVisited = currentNode.timesVisited+1
             if(won):
                 currentNode.timesWon = currentNode.timesWon+1
             currentNode = currentNode.parent
-    def CalculateUCB(node):
+    def CalculateUCB(self, node):
         if node.timesVisited == 0:
             return math.inf
-        return node.timesWon/node.timesVisited + C * math.sqrt(math.log(node.parent.timesVisited) / node.timesVisited);
-    def CalculateBestMove(game):
+        return node.timesWon/node.timesVisited + C * math.sqrt(math.log(node.parent.timesVisited) / node.timesVisited)
+    def CalculateBestMove(self, game):
         return (1,1,1,1)
 
-    def MakeMove(game):
+    def MakeMove(self, game):
         (fromX, fromY, toX, toY) = CalculateBestMove(game)
         game.MakeMove(fromX, fromY, toX, toY, self.colour)
+
+    def Simulation(self, node):
+        gameToSimulate = node.GetGame()
+        while(gameToSimulate.GameStatus() == GameStatus.InProgress):
+            self.MakeRandomMove(gameToSimulate)
+        if(gameToSimulate.GameStatus() == GameStatus.RedWon):
+            won = True
+        else:
+            won = False
+        self.backpropagation(node, won)
+            
+    def MakeRandomMove(self, game):
+        availableMoves = game.GetAllCurrentPossibleMoves()
+        randomMove = availableMoves[random.randint(0, len(availableMoves)-1)]
+        game.MakeMove(randomMove[0], randomMove[1], randomMove[2], randomMove[3], randomMove[4])
    
 train = 1
 
