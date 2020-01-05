@@ -53,7 +53,7 @@ def calculateDistance(x1,y1,x2,y2):
 class Game:
     # reds are first
     def __init__(self, board=None, currPlay=None):
-        self.tie = False
+        self.movesC = 0
         self.board = np.array(np.repeat(0,64))
         self.currentPlayer = PlayerColour.Red.value
         if(currPlay is not None):
@@ -212,6 +212,7 @@ class Game:
             print("Error - player attempted to move even though he can attack!")
             return
         next_move_possible = False
+        self.movesC = self.movesC+1
         # we can do it - bear in mind that possible moves include the need to conquest
         if(abs(calculateDistance(fromX,fromY,toX,toY)-2) < eps): # no attacks
             self.board[toX,toY] = self.board[fromX,fromY]
@@ -239,7 +240,7 @@ class Game:
         self.board[x,y] = val
 
     def GameStatus(self, heuristic=1):
-        if(self.tie == True):
+        if(self.movesC > 100):
             return GameStatus.Tie
         whites = 0
         reds = 0
@@ -297,7 +298,7 @@ class AI:
                     self.root = node
         if(not np.array_equal(game.board, self.root.board)): # double+ attack
             self.root = Node(None, 0, 0, None, None, game.board, colour)
-        timeout = time.time() + 2
+        timeout = time.time() + 0.5
         while True:
             self.selection(self.root)
             self.selection(self.root)
