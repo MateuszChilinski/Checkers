@@ -52,10 +52,12 @@ def calculateDistance(x1,y1,x2,y2):
 
 class Game:
     # reds are first
-    def __init__(self, moves=None):
+    def __init__(self, board=None, currPlay=None):
         self.tie = False
         self.board = np.array(np.repeat(0,64))
         self.currentPlayer = PlayerColour.Red.value
+        if(currPlay is not None):
+            self.currentPlayer = currPlay
         for i in range(1, 9):
             if(i % 2 == 1):
                 self.board[8*(i-1):8*i:2] = Checker.NotAllowed.value
@@ -74,13 +76,8 @@ class Game:
 
         self.board = self.board.reshape((8,8))
         
-        if(moves != None):
-            if(len(moves) > 100):
-                self.tie = True
-            for move in moves:
-                if(move == None):
-                    continue
-                self.MakeMove(move[0], move[1], move[2], move[3], move[4])
+        if(board is not None):
+            self.board = np.copy(board)
         
     def PrintBoard(self,fX=-1,fY=-1,hX=-1,hY=-1):
         board_to_print = np.array(np.vectorize(ConvToEnumShort)(self.board), dtype=object)
@@ -196,6 +193,8 @@ class Game:
         return False
     def MakeMove(self,fromX, fromY, toX, toY, colour):
         if(colour != self.currentPlayer):
+            print(str(colour))
+            print(str(self.currentPlayer))
             print("Error - it is not this player's turn!")
             return
         if((self.board[fromX,fromY] == Checker.White.value or self.board[fromX,fromY] == Checker.WhiteKing.value) and colour != PlayerColour.White.value):
@@ -264,27 +263,21 @@ class Game:
             return GameStatus.Tie
         return GameStatus.InProgress
 class Node:
-    def __init__(self, parent=None, timesWon=0, timesVisited=0, chosenMove=None, nodes=None):
+    def __init__(self, parent=None, timesWon=0, timesVisited=0, chosenMove=None, nodes=None, board=None, colour=PlayerColour.Red.value):
         self.parent = parent
         self.timesWon = timesWon
         self.timesVisited = timesVisited
         self.chosenMove = chosenMove
+        self.board = board
+        self.colour = colour
         if nodes==None:
             self.nodes = list()
         else:
             self.nodes = nodes
     def GetGame(self):
-        moves = self.GetMoves()
-        moves.reverse()
-        return Game(moves)
-    def GetMoves(self):
-        node = self
-        moves = list()
-        while(node.parent != None):
-            moves.append(node.chosenMove)
-            node = node.parent
-        moves.append(node.chosenMove)
-        return moves
+        #moves = self.GetMoves()
+        #moves.reverse()
+        return Game(self.board, self.colour)
 
 
 class AI:
@@ -293,16 +286,17 @@ class AI:
 
     def trainMCTS(self, it):
         self.root = Node()
+        self.root.board = Game().board
         for i in range(0, it):
             self.selection(self.root)
 
-    def MakeMove(self, game):
-        if(not np.array_equal(game.board, self.root.GetGame().board)):
+    def MakeMove(self, game, colour=None):
+        if(not np.array_equal(game.board, self.root.board)):
             for node in self.root.nodes:
-                if(np.array_equal(game.board, node.GetGame().board)):
+                if(np.array_equal(game.board, node.board)):
                     self.root = node
-        if(not np.array_equal(game.board, self.root.GetGame().board)):
-            self.root = Node()
+        if(not np.array_equal(game.board, self.root.board)): # double+ attack
+            self.root = Node(None, 0, 0, None, None, game.board, colour)
         timeout = time.time() + 2
         while True:
             self.selection(self.root)
@@ -327,7 +321,7 @@ class AI:
             for move in newMoves:
                 curretNodeGameStatus = node.GetGame()
                 curretNodeGameStatus.MakeMove(move[0], move[1], move[2], move[3], move[4])
-                newNode = Node(node, 0, 0, move, None)
+                newNode = Node(node, 0, 0, move, None, curretNodeGameStatus.board, curretNodeGameStatus.currentPlayer)
                 node.nodes.append(newNode)
                 if(curretNodeGameStatus.GameStatus() == self.desiredStatus):
                     winners.append(newNode)
@@ -398,14 +392,16 @@ else:
         ai_red = AI(GameStatus.RedWon)
         ai_white = AI(GameStatus.WhiteWon)
 
-        ai_red.trainMCTS(20)
-        ai_white.trainMCTS(20)
+        ai_red.trainMCTS(5)
+        ai_white.trainMCTS(5)
 
         while(game.GameStatus() == GameStatus.InProgress):
-            ai_red.MakeMove(game)
+            while(game.currentPlayer == PlayerColour.Red.value):
+                ai_red.MakeMove(game, PlayerColour.Red.value)
             if(game.GameStatus() != GameStatus.InProgress):
                 break
-            ai_white.MakeMove(game)
+            while(game.currentPlayer == PlayerColour.White.value):
+                ai_white.MakeMove(game, PlayerColour.White.value)
         if(game.GameStatus() == GameStatus.RedWon):
             redWon = redWon + 1
         elif(game.GameStatus() == GameStatus.WhiteWon):
