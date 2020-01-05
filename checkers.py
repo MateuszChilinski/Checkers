@@ -397,11 +397,11 @@ else:
         ai_white.trainMCTS(50)
 
         while(game.GameStatus() == GameStatus.InProgress):
-            while(game.currentPlayer == PlayerColour.Red.value):
+            while(game.currentPlayer == PlayerColour.Red.value and game.GameStatus() == GameStatus.InProgress):
                 ai_red.MakeMove(game, PlayerColour.Red.value)
             if(game.GameStatus() != GameStatus.InProgress):
                 break
-            while(game.currentPlayer == PlayerColour.White.value):
+            while(game.currentPlayer == PlayerColour.White.value and game.GameStatus() == GameStatus.InProgress):
                 ai_white.MakeMove(game, PlayerColour.White.value)
         if(game.GameStatus() == GameStatus.RedWon):
             redWon = redWon + 1
