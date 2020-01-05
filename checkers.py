@@ -3,6 +3,7 @@ import numpy as np
 import math
 import random
 import time
+import pickle
 
 eps = 0.001
 C = 0.5
@@ -52,6 +53,7 @@ def calculateDistance(x1,y1,x2,y2):
 class Game:
     # reds are first
     def __init__(self, moves=None):
+        self.tie = False
         self.board = np.array(np.repeat(0,64))
         self.currentPlayer = PlayerColour.Red.value
         for i in range(1, 9):
@@ -73,6 +75,8 @@ class Game:
         self.board = self.board.reshape((8,8))
         
         if(moves != None):
+            if(len(moves) > 100):
+                self.tie = True
             for move in moves:
                 if(move == None):
                     continue
@@ -234,21 +238,30 @@ class Game:
         self.currentPlayer = PlayerColour.White.value if self.currentPlayer == PlayerColour.Red.value else PlayerColour.Red.value
     def setxy(self,x,y,val):
         self.board[x,y] = val
-    def GameStatus(self):
+
+    def GameStatus(self, heuristic=1):
+        if(self.tie == True):
+            return GameStatus.Tie
         whites = 0
         reds = 0
         if(len(self.GetAllCurrentPossibleMoves()) == 0):
             return GameStatus.Tie
         for x in range(0, 8):
             for y in range(0, 8):
-                if(self.board[x,y] == Checker.White.value or self.board[x,y] == Checker.WhiteKing.value):
+                if(self.board[x,y] == Checker.White.value):
                     whites = whites + 1
-                if(self.board[x,y] == Checker.Red.value or self.board[x,y] == Checker.RedKing.value):
+                if(self.board[x,y] == Checker.WhiteKing.value):
+                    whites = whites + 1
+                if(self.board[x,y] == Checker.Red.value):
                     reds = reds + 1
-        if(whites == 0):
+                if(self.board[x,y] == Checker.RedKing.value):
+                    reds = reds + 1
+        if(whites == 0 or (whites*3 <= reds)):
             return GameStatus.RedWon
-        if(reds == 0):
+        if(reds == 0 or (reds*3 <= whites)):
             return GameStatus.WhiteWon
+        if(whites == 1 and reds == 1):
+            return GameStatus.Tie
         return GameStatus.InProgress
 class Node:
     def __init__(self, parent=None, timesWon=0, timesVisited=0, chosenMove=None, nodes=None):
@@ -275,14 +288,13 @@ class Node:
 
 
 class AI:
-    def __init__(self, colour):
-        self.colour = colour
+    def __init__(self, desiredStatus):
+        self.desiredStatus = desiredStatus
 
     def trainMCTS(self, it):
         self.root = Node()
         for i in range(0, it):
             self.selection(self.root)
-            print('Generating model: ' + str((i+1)/it*100) + '%')
 
     def MakeMove(self, game):
         if(not np.array_equal(game.board, self.root.GetGame().board)):
@@ -292,8 +304,9 @@ class AI:
         if(not np.array_equal(game.board, self.root.GetGame().board)):
             print("I got lost :(")
             return
-        timeout = time.time() + 5   # 5 minutes from now
+        timeout = time.time() + 2   # 5 minutes from now
         while True:
+            self.selection(self.root)
             self.selection(self.root)
             if time.time() > timeout:
                 break
@@ -305,13 +318,7 @@ class AI:
         if(len(node.nodes) == 0):
             self.expansion(node)
             return
-        bestChild = node.nodes[0]
-        bestUCB = self.CalculateUCB(bestChild)
-        for child in node.nodes:
-            ucb = self.CalculateUCB(child)
-            if bestUCB < ucb:
-                bestChild = child
-                bestUCB = ucb
+        bestChild = max(node.nodes, key=lambda nd: self.CalculateUCB(nd))
         self.selection(bestChild)
 
     def expansion(self, node):
@@ -323,7 +330,7 @@ class AI:
                 curretNodeGameStatus.MakeMove(move[0], move[1], move[2], move[3], move[4])
                 newNode = Node(node, 0, 0, move, None)
                 node.nodes.append(newNode)
-                if(curretNodeGameStatus.GameStatus() == GameStatus.RedWon):
+                if(curretNodeGameStatus.GameStatus() == self.desiredStatus):
                     winners.append(newNode)
             if(len(winners) > 0):
                 winnerNode = winners[0]
@@ -332,17 +339,16 @@ class AI:
             randomNode = node.nodes[random.randint(0, len(node.nodes)-1)]
             self.Simulation(randomNode)
         else:
-            if(node.GetGame().GameStatus() == GameStatus.RedWon):
-                won = True
+            if(node.GetGame().GameStatus() == self.desiredStatus):
+                won = 1
             else:
-                won = False
+                won = 0
             self.backpropagation(node, won)
     def backpropagation(self, node, won):
         currentNode = node
         while currentNode != None:
             currentNode.timesVisited = currentNode.timesVisited+1
-            if(won):
-                currentNode.timesWon = currentNode.timesWon+1
+            currentNode.timesWon = currentNode.timesWon+won
             currentNode = currentNode.parent
     def CalculateUCB(self, node):
         if node.timesVisited == 0:
@@ -353,10 +359,12 @@ class AI:
         gameToSimulate = node.GetGame()
         while(gameToSimulate.GameStatus() == GameStatus.InProgress):
             self.MakeRandomMove(gameToSimulate)
-        if(gameToSimulate.GameStatus() == GameStatus.RedWon):
-            won = True
+        if(gameToSimulate.GameStatus() == self.desiredStatus):
+            won = 1
         else:
-            won = False
+            won = 0
+        if(gameToSimulate.GameStatus() == GameStatus.Tie):
+            won = 0.5
         self.backpropagation(node, won)
             
     def MakeRandomMove(self, game):
@@ -381,14 +389,28 @@ if train == 0:
     game.MakeMove(5, 4, 3, 2, PlayerColour.White.value)
 else:
 
-    game = Game()
-    print("Initial")
+    redWon = 0
+    whiteWon = 0
+    ties = 0
 
-    ai = AI(PlayerColour.Red.value)
-    ai.trainMCTS(20)
-    
-    game.PrintBoard()
+    for i in range(0, 1000):
+        game = Game()
 
-    while(game.GameStatus() == GameStatus.Tie or game.GameStatus() == GameStatus.InProgress):
-        ai.MakeMove(game)
-        game.PrintBoard()
+        ai_red = AI(GameStatus.RedWon)
+        ai_white = AI(GameStatus.WhiteWon)
+
+        ai_red.trainMCTS(20)
+        ai_white.trainMCTS(20)
+
+        while(game.GameStatus() == GameStatus.InProgress):
+            ai_red.MakeMove(game)
+            if(game.GameStatus() != GameStatus.InProgress):
+                break
+            ai_white.MakeMove(game)
+        if(game.GameStatus() == GameStatus.RedWon):
+            redWon = redWon + 1
+        elif(game.GameStatus() == GameStatus.WhiteWon):
+            whiteWon = whiteWon + 1
+        else:
+            ties = ties + 1
+        print("Red won: " + str(redWon) + " White won: " + str(whiteWon) + " Ties: " + str(ties))
