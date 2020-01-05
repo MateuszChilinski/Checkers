@@ -298,7 +298,7 @@ class AI:
                     self.root = node
         if(not np.array_equal(game.board, self.root.board)): # double+ attack
             self.root = Node(None, 0, 0, None, None, game.board, colour)
-        timeout = time.time() + 0.5
+        timeout = time.time() + 2
         while True:
             self.selection(self.root)
             self.selection(self.root)
@@ -393,8 +393,8 @@ else:
         ai_red = AI(GameStatus.RedWon)
         ai_white = AI(GameStatus.WhiteWon)
 
-        ai_red.trainMCTS(5)
-        ai_white.trainMCTS(5)
+        ai_red.trainMCTS(50)
+        ai_white.trainMCTS(50)
 
         while(game.GameStatus() == GameStatus.InProgress):
             while(game.currentPlayer == PlayerColour.Red.value):
