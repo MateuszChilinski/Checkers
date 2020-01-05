@@ -302,9 +302,8 @@ class AI:
                 if(np.array_equal(game.board, node.GetGame().board)):
                     self.root = node
         if(not np.array_equal(game.board, self.root.GetGame().board)):
-            print("I got lost :(")
-            return
-        timeout = time.time() + 2   # 5 minutes from now
+            self.root = Node()
+        timeout = time.time() + 2
         while True:
             self.selection(self.root)
             self.selection(self.root)
