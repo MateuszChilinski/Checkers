@@ -78,7 +78,7 @@ class Game:
         
         if(board is not None):
             self.board = np.copy(board)
-        
+    # prints the board
     def PrintBoard(self,fX=-1,fY=-1,hX=-1,hY=-1):
         board_to_print = np.array(np.vectorize(ConvToEnumShort)(self.board), dtype=object)
         if(hX != -1 and hY != -1 and fX != -1 and fY != -1):
@@ -86,7 +86,7 @@ class Game:
             board_to_print[hX,hY] = ("(" + str.strip(board_to_print[hX,hY]) + ")")
         print(board_to_print)
         print("")
-
+    # gets all globally available moves in current situation (and current player)
     def GetAllCurrentPossibleMoves(self):
         moves = list()
         for x in range(0, 8):
@@ -99,7 +99,7 @@ class Game:
                         moves.append((x, y , move[0], move[1], self.currentPlayer))
         return moves
 
-
+    # gets possible moves from one location (including multiple jumping)
     def GetPossibleMoves(self, fromX, fromY): # x - row y - column
         possible_moves = self.GetAllPossibleMoves(fromX,fromY)
         if(self.board[fromX,fromY] == Checker.White.value or self.board[fromX,fromY] == Checker.WhiteKing.value):
@@ -119,6 +119,7 @@ class Game:
             else:
                 return set()
         return possible_moves
+    # internal function, does not check multiple jumping
     def GetAllPossibleMoves(self, fromX, fromY): # x - row y - column
         possible_moves = set()
         left_top = self.CheckLeftTop(fromX,fromY)
@@ -141,7 +142,7 @@ class Game:
             if(right_bottom != False):
                 possible_moves.add(right_bottom)
         return self.ParsePossibleMoves(fromX,fromY,possible_moves)
-
+    # internal function for parsing moves
     def ParsePossibleMoves(self,fromX,fromY,possible_moves):
         can_conquest = False
         for (possibleX, possibleY) in possible_moves:
@@ -155,7 +156,7 @@ class Game:
             if(abs(calculateDistance(fromX,fromY,possibleX,possibleY)-8) < eps): 
                 new_possible_moves.add((possibleX, possibleY))
         return new_possible_moves
-
+    # internal function for checking possible moves
     def CheckFromAnyAngle(self,fromX,fromY,fX,fY,minX,minY):
         if(fromX == minX or fromY == minY): # can't go
             return False
@@ -172,6 +173,7 @@ class Game:
                 # can attack
                 return (fromX+2*fX,fromY+2*fY)
         return False
+    # internal functions for checking possible moves (user-friendly)
     def CheckLeftTop(self,fromX, fromY):
         return self.CheckFromAnyAngle(fromX,fromY,-1,-1,0,0)
     def CheckLeftBottom(self,fromX, fromY):
@@ -180,7 +182,7 @@ class Game:
         return self.CheckFromAnyAngle(fromX,fromY,1,1,7,7)
     def CheckRightTop(self,fromX, fromY):
         return self.CheckFromAnyAngle(fromX,fromY,-1,1,0,7)
-
+    # checks if a player can multiple-jump
     def CheckIfPossibleMultipleJump(self, colour):
         for x in range(0, 8):
             for y in range(0, 8):
@@ -191,6 +193,7 @@ class Game:
                         if(abs(calculateDistance(x,y,possibleX,possibleY)-8) < eps):
                             return True
         return False
+    # make move, control all restrictions
     def MakeMove(self,fromX, fromY, toX, toY, colour):
         if(colour != self.currentPlayer):
             print(str(colour))
@@ -236,9 +239,10 @@ class Game:
                     #player has to make another move
                     return
         self.currentPlayer = PlayerColour.White.value if self.currentPlayer == PlayerColour.Red.value else PlayerColour.Red.value
+    # developer's function for messing with board
     def setxy(self,x,y,val):
         self.board[x,y] = val
-
+    # gets game status
     def GameStatus(self, heuristic=1):
         if(self.movesC > 100):
             return GameStatus.Tie
@@ -256,6 +260,7 @@ class Game:
                     reds = reds + 1
                 if(self.board[x,y] == Checker.RedKing.value):
                     reds = reds + 1
+        # if one player is winning a lot, do not compute the rest of the moves
         if(whites == 0 or (whites*3 <= reds)):
             return GameStatus.RedWon
         if(reds == 0 or (reds*3 <= whites)):
@@ -275,6 +280,7 @@ class Node:
             self.nodes = list()
         else:
             self.nodes = nodes
+    # gets game in current node
     def GetGame(self):
         #moves = self.GetMoves()
         #moves.reverse()
@@ -284,13 +290,13 @@ class Node:
 class AI:
     def __init__(self, desiredStatus):
         self.desiredStatus = desiredStatus
-
+    # training function
     def trainMCTS(self, it):
         self.root = Node()
         self.root.board = Game().board
         for i in range(0, it):
             self.selection(self.root)
-
+    # make move using the tree
     def MakeMove(self, game, colour=None):
         if(not np.array_equal(game.board, self.root.board)):
             for node in self.root.nodes:
@@ -299,6 +305,7 @@ class AI:
         if(not np.array_equal(game.board, self.root.board)): # double+ attack
             self.root = Node(None, 0, 0, None, None, game.board, colour)
         timeout = time.time() + 2
+        # learn a little more
         while True:
             self.selection(self.root)
             self.selection(self.root)
@@ -307,14 +314,14 @@ class AI:
         bestNode = max(self.root.nodes, key=lambda node: node.timesWon)
         self.root = bestNode
         game.MakeMove(bestNode.chosenMove[0], bestNode.chosenMove[1], bestNode.chosenMove[2], bestNode.chosenMove[3], bestNode.chosenMove[4])
-        
+    # standard MCTS selection
     def selection(self, node):
         if(len(node.nodes) == 0):
             self.expansion(node)
             return
         bestChild = max(node.nodes, key=lambda nd: self.CalculateUCB(nd))
         self.selection(bestChild)
-
+    # standard MCTS expansion
     def expansion(self, node):
         if(node.GetGame().GameStatus() == GameStatus.InProgress):
             winners = list()
@@ -338,17 +345,19 @@ class AI:
             else:
                 won = 0
             self.backpropagation(node, won)
+    # standard MCTS backpropagation
     def backpropagation(self, node, won):
         currentNode = node
         while currentNode != None:
             currentNode.timesVisited = currentNode.timesVisited+1
             currentNode.timesWon = currentNode.timesWon+won
             currentNode = currentNode.parent
+    # standard UCB calculation
     def CalculateUCB(self, node):
         if node.timesVisited == 0:
             return math.inf
         return node.timesWon/node.timesVisited + C * math.sqrt(math.log(node.parent.timesVisited) / node.timesVisited)
-
+    # standard MCTS simulation
     def Simulation(self, node):
         gameToSimulate = node.GetGame()
         while(gameToSimulate.GameStatus() == GameStatus.InProgress):
@@ -366,8 +375,10 @@ class AI:
         randomMove = availableMoves[random.randint(0, len(availableMoves)-1)]
         game.MakeMove(randomMove[0], randomMove[1], randomMove[2], randomMove[3], randomMove[4])
 
+# tests
 train = 1
 
+# testing moves (no AI)
 if train == 0:
     game = Game()
     print("Initial")
@@ -382,7 +393,7 @@ if train == 0:
     game.MakeMove(7, 2, 5, 4, PlayerColour.White.value)
     game.MakeMove(5, 4, 3, 2, PlayerColour.White.value)
 else:
-
+    # multiple tests of AI
     redWon = 0
     whiteWon = 0
     ties = 0
