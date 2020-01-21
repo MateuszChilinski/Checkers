@@ -6,7 +6,7 @@ import time
 import pickle
 
 eps = 0.001
-C = 0.5
+C = 2
 class Checker(Enum):
     NotAllowed = -1
     Empty = 0
@@ -50,14 +50,25 @@ def calculateDistance(x1,y1,x2,y2):
      dist = (x2 - x1)**2 + (y2 - y1)**2  
      return dist  
 
+class Move:
+    def __init__(self, x, y, toX, toY, player):
+        self.x = x
+        self.y = y
+        self.toX = toX
+        self.toY = toY
+        self.player = player
+
 class Game:
     # reds are first
     def __init__(self, board=None, currPlay=None):
         self.movesC = 0
-        self.board = np.array(np.repeat(0,64))
         self.currentPlayer = PlayerColour.Red.value
         if(currPlay is not None):
             self.currentPlayer = currPlay
+        if(board is not None):
+            self.board = np.copy(board)
+            return
+        self.board = np.array(np.repeat(0,64))
         for i in range(1, 9):
             if(i % 2 == 1):
                 self.board[8*(i-1):8*i:2] = Checker.NotAllowed.value
@@ -76,8 +87,6 @@ class Game:
 
         self.board = self.board.reshape((8,8))
         
-        if(board is not None):
-            self.board = np.copy(board)
     # prints the board
     def PrintBoard(self,fX=-1,fY=-1,hX=-1,hY=-1):
         board_to_print = np.array(np.vectorize(ConvToEnumShort)(self.board), dtype=object)
@@ -96,7 +105,7 @@ class Game:
                     (self.currentPlayer == PlayerColour.Red.value and (self.board[x,y] == Checker.Red.value or self.board[x,y] == Checker.RedKing.value))):
                     for move in self.GetPossibleMoves(x,y):
                         #print(move)
-                        moves.append((x, y , move[0], move[1], self.currentPlayer))
+                        moves.append(Move(x, y , move[0], move[1], self.currentPlayer))
         return moves
 
     # gets possible moves from one location (including multiple jumping)
@@ -144,18 +153,13 @@ class Game:
         return self.ParsePossibleMoves(fromX,fromY,possible_moves)
     # internal function for parsing moves
     def ParsePossibleMoves(self,fromX,fromY,possible_moves):
-        can_conquest = False
-        for (possibleX, possibleY) in possible_moves:
-            if(abs(calculateDistance(fromX,fromY,possibleX,possibleY)-8) < eps): 
-                can_conquest = True
-                break
-        if(can_conquest == False):
-            return possible_moves
         new_possible_moves = set()
         for (possibleX, possibleY) in possible_moves:
             if(abs(calculateDistance(fromX,fromY,possibleX,possibleY)-8) < eps): 
                 new_possible_moves.add((possibleX, possibleY))
-        return new_possible_moves
+        if(len(new_possible_moves) > 0):
+            return new_possible_moves
+        return possible_moves
     # internal function for checking possible moves
     def CheckFromAnyAngle(self,fromX,fromY,fX,fY,minX,minY):
         if(fromX == minX or fromY == minY): # can't go
@@ -313,7 +317,7 @@ class AI:
                 break
         bestNode = max(self.root.nodes, key=lambda node: node.timesWon)
         self.root = bestNode
-        game.MakeMove(bestNode.chosenMove[0], bestNode.chosenMove[1], bestNode.chosenMove[2], bestNode.chosenMove[3], bestNode.chosenMove[4])
+        game.MakeMove(bestNode.chosenMove.x, bestNode.chosenMove.y, bestNode.chosenMove.toX, bestNode.chosenMove.toY, bestNode.chosenMove.player)
     # standard MCTS selection
     def selection(self, node):
         if(len(node.nodes) == 0):
@@ -323,12 +327,14 @@ class AI:
         self.selection(bestChild)
     # standard MCTS expansion
     def expansion(self, node):
-        if(node.GetGame().GameStatus() == GameStatus.InProgress):
+        currGame = node.GetGame()
+        currentGameStatus = currGame.GameStatus()
+        if(currentGameStatus == GameStatus.InProgress):
             winners = list()
-            newMoves = node.GetGame().GetAllCurrentPossibleMoves()
+            newMoves = currGame.GetAllCurrentPossibleMoves()
             for move in newMoves:
                 curretNodeGameStatus = node.GetGame()
-                curretNodeGameStatus.MakeMove(move[0], move[1], move[2], move[3], move[4])
+                curretNodeGameStatus.MakeMove(move.x, move.y, move.toX, move.toY, move.player)
                 newNode = Node(node, 0, 0, move, None, curretNodeGameStatus.board, curretNodeGameStatus.currentPlayer)
                 node.nodes.append(newNode)
                 if(curretNodeGameStatus.GameStatus() == self.desiredStatus):
@@ -340,7 +346,7 @@ class AI:
             randomNode = node.nodes[random.randint(0, len(node.nodes)-1)]
             self.Simulation(randomNode)
         else:
-            if(node.GetGame().GameStatus() == self.desiredStatus):
+            if(currentGameStatus == self.desiredStatus):
                 won = 1
             else:
                 won = 0
@@ -373,7 +379,7 @@ class AI:
     def MakeRandomMove(self, game):
         availableMoves = game.GetAllCurrentPossibleMoves()
         randomMove = availableMoves[random.randint(0, len(availableMoves)-1)]
-        game.MakeMove(randomMove[0], randomMove[1], randomMove[2], randomMove[3], randomMove[4])
+        game.MakeMove(randomMove.x, randomMove.y, randomMove.toX, randomMove.toY, randomMove.player)
 
 # tests
 train = 1
@@ -406,7 +412,7 @@ else:
 
         ai_red.trainMCTS(50)
         ai_white.trainMCTS(50)
-
+        print("Trained")
         while(game.GameStatus() == GameStatus.InProgress):
             while(game.currentPlayer == PlayerColour.Red.value and game.GameStatus() == GameStatus.InProgress):
                 ai_red.MakeMove(game, PlayerColour.Red.value)
